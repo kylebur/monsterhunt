@@ -1,32 +1,150 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebXR Hello World - AR Sphere</title>
-  <!-- A-Frame library for 3D and WebXR -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <!-- AR.js for marker-based AR in A-Frame -->
-  <script src="https://cdn.jsdelivr.net/npm/aframe-ar@0.3.1/dist/aframe-ar.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Diagnostic Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; padding: 1rem; }
+        #debugOutput {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            min-height: 200px;
+            white-space: pre-wrap; /* Keep formatting */
+            word-wrap: break-word; /* Wrap long lines */
+            border-radius: 8px; /* Rounded corners */
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            color: white;
+            background-color: #3b82f6; /* Blue */
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #2563eb; /* Darker blue */
+        }
+        button:disabled {
+            background-color: #9ca3af; /* Gray */
+            cursor: not-allowed;
+        }
+    </style>
 </head>
-<body>
-  <!-- A-Frame scene -->
-  <a-scene
-    vr-mode-ui="enabled: false"
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-    renderer="antialias: true; alpha: true">
-    <!-- Marker to anchor the sphere (Hiro marker) -->
-    <a-marker preset="hiro">
-      <!-- Red sphere positioned above the marker -->
-      <a-sphere
-        position="0 0.5 0"
-        radius="0.5"
-        color="red"
-        material="shininess: 30">
-      </a-sphere>
-    </a-marker>
-    <!-- Camera entity -->
-    <a-entity camera></a-entity>
-  </a-scene>
+<body class="bg-gray-100">
+
+    <h1 class="text-xl font-bold mb-4">WebXR AR Diagnostic</h1>
+
+    <button id="startButton" disabled>Check & Start AR Session</button>
+
+    <div id="debugOutput">
+        Debug Output:
+        -----------------
+    </div>
+
+    <script>
+        const startButton = document.getElementById('startButton');
+        const debugOutput = document.getElementById('debugOutput');
+        let xrSession = null; // To hold the session if started
+
+        // Function to display messages on the screen
+        function displayDebug(message) {
+            console.log(message); // Also log to console
+            debugOutput.textContent += `\n${message}`;
+        }
+
+        // --- Initialization Check ---
+        function checkXRSupport() {
+            displayDebug("Checking for navigator.xr...");
+            if ('xr' in navigator) {
+                displayDebug("✅ navigator.xr found.");
+                startButton.disabled = false; // Enable the button
+                startButton.onclick = checkAndStartSession; // Assign click handler
+            } else {
+                displayDebug("❌ navigator.xr NOT found. WebXR API is unavailable.");
+                startButton.disabled = true;
+            }
+        }
+
+        // --- Session Check and Start ---
+        async function checkAndStartSession() {
+            startButton.disabled = true; // Disable button during checks
+            displayDebug("\n--- Button Clicked ---");
+
+            if (!('xr' in navigator)) {
+                displayDebug("❌ navigator.xr not available (Double check).");
+                return;
+            }
+
+            displayDebug("Checking navigator.xr.isSessionSupported('immersive-ar')...");
+            try {
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (supported) {
+                    displayDebug("✅ 'immersive-ar' session IS supported.");
+                    displayDebug("Attempting to request 'immersive-ar' session...");
+
+                    try {
+                        // Request the session
+                        // Use optionalFeatures if needed, but keep it minimal for testing
+                        xrSession = await navigator.xr.requestSession('immersive-ar', {
+                           // requiredFeatures: ['local-floor'], // Keep it simple first
+                           // optionalFeatures: ['local-floor', 'hit-test']
+                        });
+
+                        displayDebug("✅ Session requested successfully!");
+                        displayDebug("Session Object: " + (xrSession ? "Obtained" : "Null"));
+
+                        // Add listener for session end
+                        xrSession.addEventListener('end', () => {
+                             displayDebug("ℹ️ Session ended.");
+                             xrSession = null;
+                             startButton.disabled = false; // Re-enable button
+                        });
+
+                        // Minimal setup: Try getting a reference space (common next step)
+                         displayDebug("Attempting to get 'local-floor' reference space...");
+                         try {
+                            const refSpace = await xrSession.requestReferenceSpace('local-floor');
+                            displayDebug("✅ Successfully got 'local-floor' reference space.");
+                            // In a real app, you'd start rendering here
+                            // For diagnostics, we can stop or add more checks
+                            displayDebug("--- Basic AR Session Setup OK ---");
+                            // Optionally end the session after a short delay for testing
+                            // setTimeout(() => {
+                            //    displayDebug("Ending session automatically for test.");
+                            //    xrSession.end();
+                            // }, 5000);
+
+                         } catch(refSpaceErr) {
+                             displayDebug(`❌ Error getting 'local-floor' reference space: ${refSpaceErr.name} - ${refSpaceErr.message}`);
+                         }
+
+
+                    } catch (sessionErr) {
+                        displayDebug(`❌ Error requesting session: ${sessionErr.name} - ${sessionErr.message}`);
+                        startButton.disabled = false; // Re-enable button on failure
+                    }
+
+                } else {
+                    displayDebug("❌ 'immersive-ar' session NOT supported by this device/browser.");
+                    startButton.disabled = false; // Re-enable button
+                }
+            } catch (supportErr) {
+                displayDebug(`❌ Error checking session support: ${supportErr.name} - ${supportErr.message}`);
+                startButton.disabled = false; // Re-enable button
+            }
+        }
+
+        // --- Start the check on page load ---
+        window.onload = checkXRSupport;
+
+    </script>
+
 </body>
 </html>
+
